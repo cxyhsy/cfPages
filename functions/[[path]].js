@@ -5,36 +5,40 @@ const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
 const encoder = new TextEncoder();
 import { connect } from 'cloudflare:sockets';
-export default {
-  async fetch(request, env, ctx) {
-    try {
-      const upgradeHeader = request.headers.get('Upgrade');
-      if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
-        return new URL(request.url).pathname === '/'
-          ? new Response('恭喜，当前网址可用于CF Workers/Pages的Socks5或Http本地代理服务', { status: 200 })
-          : new Response('当前网址出错，请确认', { status: 426 });
-      }
-      if (token && request.headers.get('Sec-WebSocket-Protocol') !== token) {
-        return new Response('Unauthorized', { status: 401 });
-      }
-      const [client, server] = Object.values(new WebSocketPair());
-      server.accept();
-      server.binaryType = 'arraybuffer';
-      handleSession(server).catch(() => safeCloseWebSocket(server));
-      const responseInit = {
-        status: 101,
-        webSocket: client
-      };
-      if (token) {
-        responseInit.headers = { 'Sec-WebSocket-Protocol': token };
-      }
-      return new Response(null, responseInit);
 
-    } catch (err) {
-      return new Response(err.toString(), { status: 500 });
+// ✅ 已修改：适配 Cloudflare Pages Functions 的路由导出方式
+export async function onRequest(context) {
+  // 从 context 中提取 Pages 运行环境所需的变量
+  const { request, env, ctx } = context;
+
+  try {
+    const upgradeHeader = request.headers.get('Upgrade');
+    if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
+      return new URL(request.url).pathname === '/'
+        ? new Response('恭喜，当前网址可用于CF Workers/Pages的Socks5或Http本地代理服务', { status: 200 })
+        : new Response('当前网址出错，请确认', { status: 426 });
     }
-  },
-};
+    if (token && request.headers.get('Sec-WebSocket-Protocol') !== token) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+    const [client, server] = Object.values(new WebSocketPair());
+    server.accept();
+    server.binaryType = 'arraybuffer';
+    handleSession(server).catch(() => safeCloseWebSocket(server));
+    const responseInit = {
+      status: 101,
+      webSocket: client
+    };
+    if (token) {
+      responseInit.headers = { 'Sec-WebSocket-Protocol': token };
+    }
+    return new Response(null, responseInit);
+
+  } catch (err) {
+    return new Response(err.toString(), { status: 500 });
+  }
+}
+
 async function handleSession(webSocket) {
   let remoteSocket, remoteWriter, remoteReader;
   let isClosed = false;

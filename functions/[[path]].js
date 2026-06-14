@@ -1,10 +1,11 @@
-const pyip = ['pyip.ygkkk.dpdns.org']; //自定义proxyip：''之间可使用IP或者域名，IPV6需[]，不支持带端口
-const token = 'cxyhsy123';//''之间可使用任意字符密码，客户端token保持一致
+const pyip = ['pyip.ygkkk.dpdns.org']; // 自定义proxyip
+const token = ''; // 关闭鉴权密码
 
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
 const encoder = new TextEncoder();
 import { connect } from 'cloudflare:sockets';
+
 export default {
   async fetch(request, env, ctx) {
     try {
@@ -35,6 +36,7 @@ export default {
     }
   },
 };
+
 async function handleSession(webSocket) {
   let remoteSocket, remoteWriter, remoteReader;
   let isClosed = false;
@@ -48,11 +50,11 @@ async function handleSession(webSocket) {
     remoteWriter = remoteReader = remoteSocket = null;
     safeCloseWebSocket(webSocket);
   };
+
   const pumpRemoteToWebSocket = async () => {
     try {
       while (!isClosed && remoteReader) {
         const { done, value } = await remoteReader.read();
-
         if (done) break;
         if (webSocket.readyState !== WS_READY_STATE_OPEN) break;
         if (value?.byteLength > 0) webSocket.send(value);
@@ -64,6 +66,7 @@ async function handleSession(webSocket) {
       cleanup();
     }
   };
+
   const parseAddress = (addr) => {
     if (addr[0] === '[') {
       const end = addr.indexOf(']');
@@ -78,12 +81,14 @@ async function handleSession(webSocket) {
       port: parseInt(addr.substring(sep + 1), 10)
     };
   };
+
   const isCFError = (err) => {
     const msg = err?.message?.toLowerCase() || '';
     return msg.includes('proxy request') ||
            msg.includes('cannot connect') ||
            msg.includes('cloudflare');
   };
+
   const parseClientPyip = (s) => {
     if (!s) return null;
     const trimmed = String(s).trim();
@@ -98,13 +103,12 @@ async function handleSession(webSocket) {
 
     return arr.length ? arr : null;
   };
+
   const connectToRemote = async (targetAddr, firstFrameData, clientPyip) => {
     const { host, port } = parseAddress(targetAddr);
-
-    const pyipList = (Array.isArray(clientPyip) && clientPyip.length)
-      ? clientPyip
-      : pyip;
+    const pyipList = (Array.isArray(clientPyip) && clientPyip.length) ? clientPyip : pyip;
     const attempts = [null, ...pyipList];
+
     for (let i = 0; i < attempts.length; i++) {
       try {
         remoteSocket = connect({
@@ -132,6 +136,7 @@ async function handleSession(webSocket) {
       }
     }
   };
+
   webSocket.addEventListener('message', async (event) => {
     if (isClosed) return;
     try {
@@ -161,13 +166,14 @@ async function handleSession(webSocket) {
       cleanup();
     }
   });
+
   webSocket.addEventListener('close', cleanup);
   webSocket.addEventListener('error', cleanup);
 }
+
 function safeCloseWebSocket(ws) {
   try {
-    if (ws.readyState === WS_READY_STATE_OPEN ||
-        ws.readyState === WS_READY_STATE_CLOSING) {
+    if (ws.readyState === WS_READY_STATE_OPEN || ws.readyState === WS_READY_STATE_CLOSING) {
       ws.close(1000, 'Server closed');
     }
   } catch {}
